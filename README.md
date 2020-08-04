@@ -1,3 +1,3 @@
-# boun01-egc-boun
-boun01-egc-boun created by GitHub Classroom
-Repository
+# Egecan Esen 48a Github Page
+
+Click here for repository: https://pjournal.github.io/boun01-egc-boun/
