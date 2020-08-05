@@ -1,4 +1,4 @@
 ### Egecan Esen Progress Journal
 
-#Assignment 1
-This is assignment 1 deneme
+## Assignment1
+[My RMarkdown Assignment](Assigment1.html) 
