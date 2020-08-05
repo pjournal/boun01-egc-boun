@@ -1,2 +1,2 @@
 ## Assignment1
-[My RMarkdown Assignment](Assignment1.html) 
+[My RMarkdown Assignment](https://pjournal.github.io/boun01-egc-boun/Assignment1.html) 
