@@ -1,0 +1,202 @@
+---
+title: "Electricity Market Prices - July Report"
+author: "Egecan Esen"
+date: "8/17/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+library(lubridate)
+raw_df <- read_excel("ptf-smf.xls")
+```
+
+## First Glimpse At the Data
+This is a report about the electricity prices in July 2020.
+The data used in this project can be reached from this [link](https://rapor.epias.com.tr/rapor/xhtml/ptfSmfListeleme.xhtml).
+
+First, let's take a quick look at the data: 
+
+```{r glimpse, echo=TRUE}
+raw_df %>% glimpse()
+```
+
+## Rearranging the Dataframe
+It can be seen that all the data is in form of 'character'. The name of the columns must be changed, 'Tarih' column needs to be converted to 'POSIXct', 'PTF' & 'SMF' need to be converted to 'double'.
+
+```{r, echo=TRUE}
+df <- raw_df
+df$DateTime <- dmy_hm(df$Tarih)
+
+df[,c(2:4)] <- lapply(df[,c(2:4)],function(x) as.numeric(gsub(",", ".", gsub("\\.", "", x))))
+
+colnames(df)[2] = "MCP" #Market Clearing Price
+colnames(df)[3] = "SMP" #System Marginal Price
+
+df <- df %>% select(7,2,3)
+
+df %>% glimpse()
+```
+
+The Dataframe is ready to analyze.
+
+## Data Analysis
+
+The visualization of the dataframe: 
+
+```{r, echo=TRUE}
+df %>% pivot_longer(.,-DateTime) %>% ggplot(aes(x=DateTime,y=value,color=name)) +geom_line() + theme_minimal() + labs(x="Date", y="TL/MWh", color="", title = "MCP & SMP", subtitle = "Prices during the month of July") + scale_x_datetime(date_breaks = "2 days",date_labels = "%m/%d")
+```
+```{r, echo=TRUE}
+df %>% ggplot(aes(x=MCP,y=SMP, color=DateTime)) +geom_point(position="jitter") + theme_minimal() + labs(title = "MCP vs SMP", subtitle = "Prices during the month of July") + scale_colour_gradientn(name= "Date", colours=rainbow(7), labels= c("30-06","05-07","11-07","17-07","23-07","29-07")) 
+```
+
+
+Let's check some basic daily stats of market clearing and system marginal prices:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#Mean, Median, Maximum, Minimum & Standard Deviation of Each Day's MCP
+MCP <- df %>%
+  mutate(Day=date(DateTime)) %>%
+  group_by(Day) %>%
+  summarise(meanMCP = mean(MCP), medianMCP = median(MCP), maxMCP = max(MCP), minMCP = min(MCP), sdMCP =sd(MCP))
+
+#Mean, Median, Maximum, Minimum & Standard Deviation of Each Day's SMP
+SMP <- df %>%
+  mutate(Day=date(DateTime)) %>%
+  group_by(Day) %>%
+  summarise(meanSMP = mean(SMP), medianSMP = median(SMP), maxSMP = max(SMP), minSMP = min(SMP), sdSMP = sd(SMP))
+
+Means <- bind_cols(Day = MCP$Day,meanMCP = MCP$meanMCP, meanSMP = SMP$meanSMP)
+```
+
+```{r, echo=TRUE}
+Means %>% pivot_longer(.,-Day) %>% ggplot(aes(x=Day,y=value,color=name)) +geom_line() + theme_minimal() + labs(x="Date", y="TL/MWh", color="", title = "Daily Average MCP & SMP ", subtitle = "Prices during the month of July") + expand_limits(y=0) + scale_x_date(date_breaks = "1 day", date_labels = "%d")
+```
+
+The statistics of hourly prices can be checked in the same way:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+df %>%
+  mutate(Hour=hour(DateTime)) %>%
+  group_by(Hour) %>%
+  summarise(meanMCP = mean(MCP), medianMCP = median(MCP), maxMCP = max(MCP), minMCP = min(MCP), sdMCP =sd(MCP))
+
+df %>%
+  mutate(Hour=hour(DateTime)) %>%
+  group_by(Hour) %>%
+  summarise(meanSMP = mean(SMP), medianSMP = median(SMP), maxSMP = max(SMP), minSMP = min(SMP), sdSMP = sd(SMP))
+```
+
+From the tables above, it seems that the prices are lower during night time. Below is the comparison of the prices during day (8-22) and night (22-8):
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#Daytime hours 
+daytime <- df %>%
+  mutate(Hour=hour(DateTime),Day=as_date(DateTime)) %>%
+  filter(Hour >= 8 & Hour <= 22) %>%
+  select(Day,MCP, SMP) %>%
+  group_by(Day) %>%
+  summarise(MCP = mean(MCP), SMP = mean(SMP), DIFF = round(MCP-SMP,digits=2)) %>%
+  arrange(DIFF)
+
+#Nighttime hours
+nighttime <- df %>%
+  mutate(Hour=hour(DateTime),Night=as_date(DateTime)) %>%
+  filter(Hour > 22 | Hour < 8) %>%
+  select(Night,MCP, SMP) %>%
+  group_by(Night) %>%
+  summarise(MCP = mean(MCP), SMP = mean(SMP), DIFF = round(MCP-SMP,digits=2)) %>%
+  arrange(DIFF)
+
+daynight <- bind_cols(Date= daytime$Day, Day = daytime$DIFF, Night = nighttime$DIFF)
+
+daynight %>% pivot_longer(.,-Date) %>% ggplot(aes(x=Date,y=value,fill=name)) +geom_bar(stat="identity", position ="dodge") + theme_minimal() + labs(x="Date", y="TL/MWh", color="", title = "Daytime vs Nighttime Difference ", subtitle = "A comparison of average daytime and nighttime MCP&SMP differences ") + scale_x_date(date_breaks = "1 day", date_labels = "%d")
+
+```
+
+Daily Average MCP during daytime is `r format(mean(daytime$MCP))` and standard deviation is `r format(sd(daytime$MCP))` .
+
+Daily Average MCP during nighttime is `r format(mean(nighttime$MCP))` and standard deviation is `r format(sd(nighttime$MCP))` .
+
+Daily Average SMP during daytime is `r format(mean(daytime$SMP))` and standard deviation is `r format(sd(daytime$SMP))` .
+
+Daily Average SMP during nighttime is `r format(mean(nighttime$SMP))` and standard deviation is `r format(sd(nighttime$SMP))` .
+
+It can be seen that the average daytime MCP is higher than SMP,but the reverse is true for SMP.
+Also, the standard deviation of SMP is significantly higher than MCP.
+
+The ratio of MCP/SMP is also worth taking a look at:
+
+```{r, echo=TRUE,message=FALSE, warning=FALSE}
+#Lowest 10 MCP/SMP ratios
+lowest <- df %>%
+  mutate(MCP_SMP_RATIO = MCP/SMP) %>%
+  select(DateTime,MCP_SMP_RATIO) %>%
+  arrange(MCP_SMP_RATIO) %>%
+  slice(1:10)
+
+#Highest 10 MCP/SMP ratios
+highest <- df %>%
+  mutate(MCP_SMP_RATIO = MCP/SMP) %>%
+  select(DateTime,MCP_SMP_RATIO) %>%
+  arrange(desc(MCP_SMP_RATIO)) %>%
+  slice(1:10)
+
+df %>%
+  mutate(MCP_SMP_RATIO = MCP/SMP) %>%
+  select(DateTime,MCP_SMP_RATIO) %>%
+  ggplot(aes(x=DateTime,y=MCP_SMP_RATIO)) +
+  geom_line() +
+  coord_cartesian(ylim = c(0, 3)) +
+  scale_x_datetime(date_breaks = "1 day",date_labels = "%d") +
+  labs(x="Date", y="MCP/SMP", color="", title = "MCP/SMP Ratio ") +
+  theme_minimal() 
+```
+
+The 3 highest MCP/SMP Ratios (`r format(highest$MCP_SMP_RATIO[1:3])`) are significantly higher than the following (`r format(highest$MCP_SMP_RATIO[4:7])` ...) ones.
+They are observed consecutively at `r format(highest$DateTime[0:3])` 
+.
+The same cannot be said about lowest MCP Ratios (`r format(lowest$MCP_SMP_RATIO[1:6])` ...)
+The average MCP/SMP Ratio during the month of July is `r format(mean(highest$MCP_SMP_RATIO))`
+However, this average drops to `r format(mean(highest$MCP_SMP_RATIO[ -c(1,2,3) ]))` when the 3 highest ratios are removed.
+
+Let's take a look at which & how many hours the MCP is almost equal to SMP:
+
+```{r, echo=TRUE,message=FALSE, warning=FALSE}
+almost <- df %>%
+  mutate(roundMCP = round(MCP), roundSMP = round(SMP)) %>%
+  filter(roundMCP == roundSMP) %>%
+  select(DateTime, roundMCP,roundSMP) %>%
+  rename(MCP = roundMCP, SMP = roundSMP)
+print(almost)
+```
+
+The percentage of hours MCP is almost equal to SMP (ratio is almost 1) is `r format(round(nrow(almost)/nrow(df)*100, digits=2))` %
+
+When MCP is higher than SMP, it means there is an energy surplus, when it is lower than SMP, it means there is an energy deficit.
+
+```{r, echo=TRUE,message=FALSE, warning=FALSE}
+p <- df %>%
+  filter(SMP < MCP)%>%
+  count()/count(df)*100
+```
+
+```{r, echo=TRUE, eval=TRUE,message=FALSE, warning=FALSE}
+df %>% mutate(SD = ifelse(SMP > MCP, "surplus", "deficit")) %>%
+  ggplot(aes(x="",y=SD,fill=SD)) + 
+  geom_bar(stat="identity",width=1) + 
+  coord_polar("y", start = 0) +
+  labs(title="Energy deficit/surplus percentage", x="",y="",fill = "Deficit or Surplus") +
+  theme_minimal() 
+  
+```
+
+The percentage of hours where there was an energy deficit: `r format(round(p,digits =3))`
+The percentage of hours where there was an energy surplus: `r format(round(100-p,digits=3))`
+
+
+My progress journal can be reached from this [link](https://pjournal.github.io/boun01-egc-boun/).
