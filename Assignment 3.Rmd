@@ -1,0 +1,219 @@
+---
+title: "Assignment 3 - Young People's Survey"
+author: "Egecan Esen"
+date: "9/13/2020"
+output: 
+  html_document:
+          toc: true
+          toc_depth: 3
+          toc_float: true
+          number_sections: true
+          code_folding: hide
+          theme: journal 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+```
+
+## Esoph Data
+
+This is an analysis of esophogeal cancer data. Let's take a look at what we are dealing with: 
+
+```{r head}
+esoph_data <- esoph
+esoph_data %>% str()
+esoph_data %>% head(10)
+```
+There are 5 columns and 88 observations in this dataframe.
+
+The columns contain information about `agegp` Age Group, `alcgp` Alcohol Consumption,  `tbcgp` Tobacco Consumption, `ncases` Number of Cases and `ncontrols` Number of controls.
+
+Let's look at the summary data of these groups:
+
+```{r summary}
+esoph_data %>% summary()
+```
+
+We can see that the age groups are divided into 6 categories that are very close in terms of their numbers of occurrence. Alcohol and tobacco consumption are divided into 4 groups as well. Number of cases ranges from 0 to 17, however at least half of them are less than or equal to 1 and their average is only 2.273. This means higher number of cases are rare.  Number of controls ranges from 1 to 60 and its mean is again, on the lower end, which is 11.08.
+
+### Analyzing the Effect of Belonging to Different Age Groups
+
+Let's look at how the age group an individual belongs to affect his or her chances of having cancer:
+
+```{r age}
+age <- esoph_data %>% 
+  group_by(agegp) %>%
+  mutate(tcases = sum(ncases),tcontrols=sum(ncontrols),npercentage=100*ncases/tcontrols)
+
+ggplot(age, aes(x=agegp, y=npercentage,fill = agegp)) +
+   geom_bar(stat="identity") +
+   labs(x= 'Age Groups', y= 'Percentage Of Cancer Cases') +
+   theme_minimal() +
+   guides(fill=guide_legend(title="Age Groups"))
+```
+Here we can see that as the age increases, percentage of cancer cases also increases. After the age of 75, there are less observations and the data are less reliable. It may be because the people who develop cancer before the age of 75 are more likely to die before the age of 75.
+
+### Analyzing the Effect of Alcohol Consumption Level
+
+Let's see how the amount of alcohol one drinks affects his or her chances of developing esophageal cancer:
+
+```{r alcohol}
+alcohol <- esoph_data %>% 
+  group_by(alcgp) %>%
+  mutate(tcontrols=sum(ncontrols),npercentage=100*ncases/tcontrols)
+
+ggplot(alcohol, aes(x=alcgp, y=npercentage,fill = alcgp)) +
+   geom_bar(stat="identity") +
+   labs(x= 'Alcohol Consumption', y= 'Percentage Of Cancer Cases') +
+   theme_minimal() +
+   guides(fill=guide_legend(title="Alcohol Consumption"))
+```
+
+People who drink more are more likely to develop esophageal cancer.
+
+### Analyzing the Effect of Tobacco Consumption Level
+
+```{r tobacco}
+tobacco <- esoph_data %>% 
+  group_by(tobgp) %>%
+  mutate(tcontrols=sum(ncontrols),npercentage=100*ncases/tcontrols)
+
+ggplot(tobacco, aes(x=tobgp, y=npercentage,fill = tobgp)) +
+   geom_bar(stat="identity") +
+   labs(x= 'Tobacco Consumption', y= 'Percentage Of Cancer Cases') +
+   theme_minimal() +
+   guides(fill=guide_legend(title="Tobacco Consumption"))
+```
+
+People who smoke more are more likely to develop esophageal cancer. However, it must be said that the differences in cancer risk are less that the other categories. This might be interpreted as, the number of cigarette one smokes matters less in terms of probability of developing cancer than the amount of alcohol consumed. Just smoking any cigarettes increases ones chances of developing cancer a lot.
+
+### Detailed Analysis of Alcohol and Tobacco Consumption's Effect in Different Age Groups
+
+Let's analyze alcohol and tobacco consumption's effect in each different age group individally:
+
+```{r age alcohol}
+age_alcohol <- age %>%
+  group_by(alcgp) %>% 
+  mutate(sum_controls=sum(ncontrols)) %>%
+  mutate(alc_percentage = 100* ncases/sum_controls)
+age_alcohol %>%
+  ggplot() +
+  geom_bar(stat= "identity", aes(x=alcgp, y = alc_percentage, fill=alcgp)) +
+  facet_grid(agegp ~ .) +
+  labs(title="Alcohol Consumption's Effect on Cancer for Different Age Groups", subtitle="A detailed analysis", x="Alcohol Consumption", y="Percentage of Cancer Cases") +
+  guides(fill=guide_legend(title="Alcohol Consumption"))
+```
+
+```{r age tobacco}
+age_tobacco <- age %>%
+  group_by(tobgp) %>% 
+  mutate(sum_controls=sum(ncontrols)) %>%
+  mutate(tob_percentage = 100* ncases/sum_controls)
+
+age_tobacco %>%
+  ggplot() +
+  geom_bar(stat= "identity", aes(x=tobgp, y = tob_percentage, fill=tobgp)) +
+  facet_grid(agegp ~ .) +
+  labs(title="Tobacco Consumption's Effect on Cancer for Different Age Groups", subtitle="A detailed analysis", x="Tobacco Consumption", y="Percentage of Cancer Cases") +
+  guides(fill=guide_legend(title="Tobacco Consumption"))
+```
+From these two graphs, it can be seen that the age groups 45-54, 55-64 and 65-74 are the groups that develop cancer most often.
+
+Also, the effects of increased use of alcohol and tobacco are most apparent and effective in those age groups.
+
+## Young People Survey Data
+
+First, let's read the data and get the necessary columns:
+
+```{r reading data}
+yps_data<-read.csv("responses.csv")
+yps_data <- yps_data[,32:63]
+```
+
+Let's take a look at the data:
+
+```{r first look}
+yps_data %>% str()
+yps_data %>% summary()
+yps_data %>% glimpse()
+```
+
+This is a dataframe of a survey of young people's interest levels of different interest areas.
+We can see that they are ranked from 1 to 5 and there are some NA cases.We need to clean up the data a little bit:
+
+```{r cleanup}
+yps <- yps_data[complete.cases(yps_data),]
+colSums(is.na(yps))
+```
+
+We can see that no NA cases are present now.
+
+### Principal Component Analysis
+
+Principal Component Analysis of the data will tell us about how each variable explains the data. Let's take a look at some of the important of components and graph them: 
+
+```{r princomp}
+yps_pca <- princomp(as.matrix(yps),cor=T)
+summary(yps_pca,loadings=TRUE)
+yps_pca
+```
+
+```{r plot}
+ggplot(data.frame(pc=1:length(yps_pca$sdev), cum_var= cumsum(yps_pca$sdev^2/sum(yps_pca$sdev^2))), aes(x=pc,y=cum_var)) + geom_point() + geom_line() + theme_minimal() + labs(title= "Cumulative Variance Explained by Principal Component", x= "Principal Component", y = "Cumulative Variance")
+```
+It can be seen that 2 PC's can explain almost 25% of the variance, 7 PC's can explain almost 50% of the variance and 15 PC's explain almost 75% of the variance.
+
+I prefer to keep all the PC's in my further analysis even though the last 12.5% of the variance is  explained by 11 PC's which makes them less important compared to other components.
+
+### Multidimensional Scaling
+
+Let's put the data in a distance matrix to see which interests are related to each other. 
+
+```{r mds}
+set.seed(27)
+#Normalize the correlations 
+dist <- 1-cor(yps)
+yps_mds <- cmdscale(dist,k=2)
+colnames(yps_mds) <- c("x","y")
+yps_mds
+```
+
+```{r mds output}
+ggplot(as.data.frame(yps_mds),aes(x=x,y=y)) + geom_text(label=rownames(yps_mds),angle=30, size=3) + labs(title="MDS Output", x= "x coordinates",y="y coordinates")
+```
+We can see that Science and technology interest relates to Mathematics and Physics.
+Medicine relates to Biology and Chemistry.
+Reading relates to Theatre and Art exhibitions and Writing.
+
+Let's try to cluster them to see distinct interest categaries that are closely related to each other:
+
+
+```{r clustering}
+set.seed(27)
+interest_cluster <- kmeans(yps_mds, centers=9)
+mds_clusters <- data.frame(interest=names(interest_cluster$cluster), cluster_mds=interest_cluster$cluster) %>% arrange (cluster_mds, interest)
+mds_clusters
+```
+
+```{r clustering graph}
+ggplot(data.frame(yps_mds) %>% mutate(clusters=as.factor(interest_cluster$cluster),interests=rownames(yps_mds)),aes(x=x,y=y)) + geom_text(aes(label=interests,color=clusters),angle=30,size=3) + geom_point(data=as.data.frame(interest_cluster$centers),aes(x=x,y=y))
+
+```
+
+The 9 clusters for the young people's interests can be seen above. This is a good estimation for how different areas of interest relates to each other among young people.
+
+## References
+
+https://mef-bda503.github.io/archive/fall17/files/intro_to_ml.html
+https://stackoverflow.com/questions/54832429/while-using-r-pca-and-plotting-cumulative-variance
+
+## Data
+https://www.kaggle.com/miroslavsabo/young-people-survey
+https://www.rdocumentation.org/packages/datasets/versions/3.6.2/topics/esoph
+
+
+
+
